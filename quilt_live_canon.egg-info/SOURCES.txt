@@ -1,7 +1,0 @@
-README.md
-setup.py
-live_canon/__init__.py
-quilt_live_canon.egg-info/PKG-INFO
-quilt_live_canon.egg-info/SOURCES.txt
-quilt_live_canon.egg-info/dependency_links.txt
-quilt_live_canon.egg-info/top_level.txt
