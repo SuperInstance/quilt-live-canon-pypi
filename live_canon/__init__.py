@@ -15,7 +15,13 @@ The 7 operations are:
   7. DRILL     — 3-paper training curriculum (DOCTRINE, IMPLEMENTATION, VERIFICATION)
 
 Polyformal: byte-exact with JavaScript, C99, Rust, Verilog, VHDL.
-State hash: 0x7f563ed9982496a1 (71 papers as of 2026-09-04).
+State hash: 0x445185a3a99fd2e7 (71 papers, canonical serialization).
+
+The canonical state hash is FNV-1a 64-bit over the canonical cell
+serialization (type(1) + id(8 LE) + dials(32 LE) + neighbors(8*N LE)),
+byte-exact with the Cloudflare Worker (quilt-live-canon worker.js).
+The retired v0.9.0 dial-only hash (0x7f563ed9982496a1) is kept as
+legacy_dial_only_state_hash() for provenance only.
 """
 from __future__ import annotations
 
@@ -25,10 +31,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import json
 import os
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 __all__ = [
     "LiveCanon", "DEFAULT_CANON", "BODIES",
     "fnv1a_64", "cell_to_dials", "state_hash",
+    "serialize_cell", "canonical_state_hash", "legacy_dial_only_state_hash",
+    "CANON_TARGET", "classify_target_provenance",
     "navigate", "confluence", "lineage", "ghost", "tick",
     "claim", "drill",
 ]
@@ -37,6 +45,17 @@ __all__ = [
 # FNV-1a 64-bit hash (UTF-8, byte-exact with JS/C/Rust/Verilog/VHDL)
 FNV_OFFSET = 0xCBF29CE484222325
 FNV_PRIME = 0x00000100000001B3
+
+
+# The declared canon target: canonical serialization over the 71-paper
+# committed corpus. COMPUTED, then pinned — verified by test/test_hash.py.
+CANON_TARGET = 0x445185A3A99FD2E7
+
+# Provenance pins (all COMPUTED, then pinned):
+#   0x7f563ed9982496a1 — legacy dial-only over this 71-paper bundle (v0.9.0 claim)
+#   0xbf27a3631cdee337 — dial-only over the retired 9-paper v0.2.0 bundle (stranded)
+LEGACY_DIAL_ONLY_71 = 0x7F563ED9982496A1
+LEGACY_DIAL_ONLY_9 = 0xBF27A3631CDEE337
 
 
 def fnv1a_64(s: str) -> int:
@@ -79,10 +98,53 @@ def cosine_sim(a: List[int], b: List[int]) -> float:
     return dot / (na * nb)
 
 
+def fnv1a_64_bytes(data: bytes) -> int:
+    """FNV-1a 64-bit over raw bytes (canonical serialization path)."""
+    h = FNV_OFFSET
+    for byte in data:
+        h ^= byte
+        h = (h * FNV_PRIME) & 0xFFFFFFFFFFFFFFFF
+    return h
+
+
+def serialize_cell(cell_id: int, dials: List[int], neighbors: List[int]) -> bytes:
+    """Canonical cell serialization, byte-exact with the Quilt spec and the
+    Cloudflare Worker: type(1)=0x01, id(uint64 LE), 16 dials(int16 LE),
+    neighbors(uint64 LE each)."""
+    out = bytearray()
+    out.append(0x01)
+    out += (int(cell_id) & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "little")
+    for d in list(dials)[:16]:
+        v = int(d) & 0xFFFF
+        out += v.to_bytes(2, "little", signed=False)
+    for n in neighbors:
+        out += (int(n) & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "little")
+    return bytes(out)
+
+
+def canonical_state_hash(papers: Dict[int, Dict[str, Any]]) -> int:
+    """FNV-1a 64-bit over the sorted canonical cell encodings
+    (type‖id‖dials‖neighbors). Byte-exact with the Cloudflare Worker."""
+    cells = []
+    for p in papers.values():
+        d = cell_to_dials(p)
+        nb = [int(x) for x in (p.get("ref_papers") or [])]
+        cells.append((p.get("number", 0), d, nb))
+    cells.sort(key=lambda c: c[0])
+    combined = b"".join(serialize_cell(cid, d, nb) for cid, d, nb in cells)
+    return fnv1a_64_bytes(combined)
+
+
 def state_hash(papers: Dict[int, Dict[str, Any]]) -> int:
-    """FNV-1a 64-bit state hash over the sorted concatenation of all dials.
-    Byte-exact with the Cloudflare Worker.
-    """
+    """The canonical state hash (see canonical_state_hash). This is the
+    honest surface hash; the dial-only algorithm is retired."""
+    return canonical_state_hash(papers)
+
+
+def legacy_dial_only_state_hash(papers: Dict[int, Dict[str, Any]]) -> int:
+    """RETIRED v0.9.0-and-earlier algorithm: FNV-1a over the sorted
+    concatenation of all dials, lo/hi split. Kept for provenance only —
+    a number produced by this function can never equal a canonical hash."""
     all_dials = [cell_to_dials(p) for p in papers.values()]
     all_dials.sort(key=lambda d: d[0])  # sort by paper number
     h = FNV_OFFSET
@@ -95,6 +157,18 @@ def state_hash(papers: Dict[int, Dict[str, Any]]) -> int:
             h ^= hi
             h = (h * FNV_PRIME) & 0xFFFFFFFFFFFFFFFF
     return h
+
+
+def classify_target_provenance(target: int) -> str:
+    """Classify a declared state-hash target (quilt-floor drift doctrine):
+    live / reachable / stranded / unknown."""
+    if target == CANON_TARGET:
+        return "live"
+    if target == LEGACY_DIAL_ONLY_71:
+        return "reachable"  # right corpus, retired algorithm — re-derivable
+    if target == LEGACY_DIAL_ONLY_9:
+        return "stranded"  # retired algorithm over a retired corpus
+    return "unknown"
 
 
 # ----- The 5 cite-graph operations (F129) -----

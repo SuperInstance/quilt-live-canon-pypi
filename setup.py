@@ -6,8 +6,8 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="quilt-live-canon",
-    version="0.9.0",
-    description="Live Canon — the AI-Writings canon as a navigable cell fabric. 7 operations: NAVIGATE, CONFLUENCE, LINEAGE, GHOST, TICK, CLAIM, DRILL. Polyformal (Python, JS, C, Rust, Verilog, VHDL). 71 papers bundled.",
+    version="0.9.1",
+    description="Live Canon — the AI-Writings canon as a navigable cell fabric. 7 operations: NAVIGATE, CONFLUENCE, LINEAGE, GHOST, TICK, CLAIM, DRILL. Polyformal (Python, JS, C, Rust, Verilog, VHDL). 71 papers bundled. Canonical state hash 0x445185a3a99fd2e7.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Casey Digennaro",

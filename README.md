@@ -3,7 +3,7 @@
 **Live Canon — read the AI-Writings canon as a navigable cell fabric.**
 
 [![npm](https://img.shields.io/npm/v/@superinstance/live-canon)](https://www.npmjs.com/package/@superinstance/live-canon)
-[![State hash](https://img.shields.io/badge/state_hash-0x7f563ed9982496a1-brightgreen)](https://live-canon.superinstance.dev)
+[![State hash](https://img.shields.io/badge/state_hash-0x445185a3a99fd2e7-brightgreen)](https://live-canon.superinstance.dev)
 [![Polyformalism](https://img.shields.io/badge/polyformal-7_substrates-blueviolet)](https://github.com/SuperInstance/quilt-rust)
 [![Papers](https://img.shields.io/badge/papers-71-orange)](https://live-canon.superinstance.dev)
 [![Ops](https://img.shields.io/badge/operations-7-yellow)](https://live-canon.superinstance.dev)
@@ -86,7 +86,14 @@ GET /api/agent/{manifest,tools,doctrine,context,identify,schema,jobs/{NIL,MAK,RU
 
 ## State hash
 
-`0x7f563ed9982496a1` (71 papers as of 2026-09-04, F98-F169)
+`0x445185a3a99fd2e7` — canonical serialization (type‖id‖dials‖neighbors,
+FNV-1a 64-bit) over the bundled 71 papers (F98-F169), byte-exact with the
+Cloudflare Worker. Verified by `test/test_hash.py` (computed, then pinned).
+
+The retired v0.9.0 dial-only hash `0x7f563ed9982496a1` over the same corpus
+is reproducible via `legacy_dial_only_state_hash()` — provenance only, never
+the live surface. A stranded target is a lie about the future; the fleet
+deletes lies.
 
 ## Polyformalism
 
