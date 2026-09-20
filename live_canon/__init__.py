@@ -15,7 +15,9 @@ The 7 operations are:
   7. DRILL     — 3-paper training curriculum (DOCTRINE, IMPLEMENTATION, VERIFICATION)
 
 Polyformal: byte-exact with JavaScript, C99, Rust, Verilog, VHDL.
-State hash: 0x7f563ed9982496a1 (71 papers as of 2026-09-04).
+State hash: 0x445185a3a99fd2e7 (71 papers, F98-F169, canonical
+serialization — drift closure 2026-09-20, matching the Cloudflare
+Worker at quilt-live-canon @ canon-71-full-corpus).
 """
 from __future__ import annotations
 
@@ -25,10 +27,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import json
 import os
 
-__version__ = "0.9.0"
+__version__ = "0.9.2"
 __all__ = [
     "LiveCanon", "DEFAULT_CANON", "BODIES",
-    "fnv1a_64", "cell_to_dials", "state_hash",
+    "fnv1a_64", "fnv1a_64_bytes", "serialize_cell", "cell_to_dials",
+    "state_hash", "state_hash_hex", "CANON_TARGET",
     "navigate", "confluence", "lineage", "ghost", "tick",
     "claim", "drill",
 ]
@@ -79,22 +82,63 @@ def cosine_sim(a: List[int], b: List[int]) -> float:
     return dot / (na * nb)
 
 
-def state_hash(papers: Dict[int, Dict[str, Any]]) -> int:
-    """FNV-1a 64-bit state hash over the sorted concatenation of all dials.
-    Byte-exact with the Cloudflare Worker.
-    """
-    all_dials = [cell_to_dials(p) for p in papers.values()]
-    all_dials.sort(key=lambda d: d[0])  # sort by paper number
+def fnv1a_64_bytes(data: bytes) -> int:
+    """FNV-1a 64-bit hash of a byte string. Byte-exact across all 6 substrates."""
     h = FNV_OFFSET
-    for dials in all_dials:
-        for v in dials:
-            lo = v & 0xFF
-            hi = (v >> 8) & 0xFF
-            h ^= lo
-            h = (h * FNV_PRIME) & 0xFFFFFFFFFFFFFFFF
-            h ^= hi
-            h = (h * FNV_PRIME) & 0xFFFFFFFFFFFFFFFF
+    for b in data:
+        h ^= b
+        h = (h * FNV_PRIME) & 0xFFFFFFFFFFFFFFFF
     return h
+
+
+def serialize_cell(cell_id: int, dials: List[int], neighbors: List[int]) -> bytes:
+    """Canonical cell serialization — byte-exact with serializeCell() in the
+    Cloudflare Worker (worker.js @ canon-71-full-corpus).
+
+    Layout: 0x01 tag ‖ id u64LE ‖ 16 dials int16LE ‖ neighbors u64LE each.
+    """
+    out = bytearray()
+    out.append(0x01)
+    out += int(cell_id).to_bytes(8, "little")
+    for v in dials:
+        # Match the Worker's DataView.setInt16(v | 0): wrap to signed 16-bit.
+        v = int(v) & 0xFFFF
+        if v >= 0x8000:
+            v -= 0x10000
+        out += v.to_bytes(2, "little", signed=True)
+    for n in neighbors:
+        out += int(n).to_bytes(8, "little")
+    return bytes(out)
+
+
+# The drift-closure contract: the bundled canon MUST hash to this target.
+CANON_TARGET = "0x445185a3a99fd2e7"
+
+
+def state_hash(papers: Dict[int, Dict[str, Any]]) -> int:
+    """Canonical FNV-1a 64-bit state hash — the drift-closure contract.
+
+    Each paper becomes a cell (id, dials, neighbors), cells are sorted by
+    id, serialized with serialize_cell(), concatenated, and hashed with
+    FNV-1a 64 over the bytes. Byte-exact with the Cloudflare Worker and
+    the @superinstance/live-canon npm package. state_hash(bundled canon)
+    == int(CANON_TARGET, 16); guarded by test/test_canon_hash.py.
+    """
+    cells = []
+    for p in papers.values():
+        dials = cell_to_dials(p)
+        neighbors = [int(n) for n in (p.get("ref_papers") or [])]
+        cells.append({"id": p["number"], "dials": dials, "neighbors": neighbors})
+    cells.sort(key=lambda c: c["id"])
+    combined = b"".join(
+        serialize_cell(c["id"], c["dials"], c["neighbors"]) for c in cells
+    )
+    return fnv1a_64_bytes(combined)
+
+
+def state_hash_hex(papers: Dict[int, Dict[str, Any]]) -> str:
+    """state_hash() as a 0x-prefixed, 16-digit hex string."""
+    return f"0x{state_hash(papers):016x}"
 
 
 # ----- The 5 cite-graph operations (F129) -----
@@ -337,8 +381,8 @@ class LiveCanon:
 
     Example:
         >>> lc = LiveCanon()
-        >>> hex(lc.state_hash())
-        '0x7f563ed9982496a1'
+        >>> lc.state_hash_hex()
+        '0x445185a3a99fd2e7'
         >>> lc.claim("trust ladder")["winner"]["f_number"]
         168
         >>> lc.drill("Mudra vessel bridge")["curriculum"]["doctrine"]["f_number"]
@@ -352,6 +396,10 @@ class LiveCanon:
 
     def state_hash(self) -> int:
         return state_hash(self.canon)
+
+    def state_hash_hex(self) -> str:
+        """Canonical state hash as a 0x-prefixed hex string (== CANON_TARGET)."""
+        return f"0x{self.state_hash():016x}"
 
     def paper_count(self) -> int:
         return len(self.canon)
