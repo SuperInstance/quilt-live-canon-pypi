@@ -6,13 +6,13 @@ with open("README.md", "r", encoding="utf-8") as f:
 
 setup(
     name="quilt-live-canon",
-    version="0.9.0",
+    version="0.9.2",
     description="Live Canon — the AI-Writings canon as a navigable cell fabric. 7 operations: NAVIGATE, CONFLUENCE, LINEAGE, GHOST, TICK, CLAIM, DRILL. Polyformal (Python, JS, C, Rust, Verilog, VHDL). 71 papers bundled.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     author="Casey Digennaro",
     author_email="superinstance@users.noreply.github.com",
-    url="https://github.com/SuperInstance/quilt-live-canon",
+    url="https://github.com/SuperInstance/quilt-live-canon-pypi",
     packages=find_packages(),
     include_package_data=True,
     package_data={"live_canon": ["_data.json"]},
